@@ -1,7 +1,8 @@
 # opulumi
 
 An agent skill that moves your app off a PaaS (Railway, Render, Heroku, Fly.io, DigitalOcean App
-Platform) and onto your own AWS account, defined in [Pulumi](https://www.pulumi.com).
+Platform) and onto your own **AWS, Google Cloud or Azure** account, defined in
+[Pulumi](https://www.pulumi.com).
 
 Your coding agent does the work, often for hours in the background: inventory, infrastructure,
 secrets, data, CI, cutover. You approve the four steps that matter. It works with any stack the
@@ -10,28 +11,44 @@ your app's language.
 
 ```
 /opulumi move this app from Railway to AWS
+/opulumi move us off Render onto GCP
+/opulumi Heroku → Azure, keep Postgres 15
 ```
 
 ## Why
 
 PaaS developer experience is great until the platform has an outage and you can't do anything but
-wait. AWS gives you an SLA and every knob, at the cost of a lot of setup that used to take days.
+wait. A hyperscaler gives you an SLA and every knob, at the cost of a lot of setup that used to take days.
 With an agent and infrastructure as code, that setup is a few hours of mostly unattended work,
 and the result is a readable Pulumi program you own.
+
+## Clouds
+
+| | AWS | Google Cloud | Azure |
+|---|---|---|---|
+| Containers | ECS Fargate + ALB | Cloud Run | Container Apps |
+| Database | RDS | Cloud SQL | Flexible Server |
+| Secrets | Secrets Manager | Secret Manager | Key Vault |
+| CI auth | IAM OIDC role | Workload Identity Federation | Federated credential |
+| Pick it when | Default; biggest ecosystem | You want the closest thing to a PaaS | Your company runs on Microsoft |
+
+All three have first-class Pulumi providers. If you don't name one, the skill recommends one and
+asks.
 
 ## What it does
 
 | Phase | What happens | You approve |
 |---|---|---|
 | 0. Inventory | Reads `railway.json`, `render.yaml`, `Procfile`, `fly.toml`, the platform CLI. Lists every service, env var name, database, volume, cron and domain, and maps each to AWS. | **Gate A:** the plan, account, region |
-| 1. Preflight | Checks Fargate quota and account status, sets a cost budget with email alerts. | |
-| 2. Pulumi | Writes `infra/`: VPC without NAT gateways, ALB + ACM, ECS Fargate services, RDS, Secrets Manager, ECR, scheduled tasks. Runs `pulumi preview`. | **Gate B:** resources and monthly cost |
+| 1. Preflight | Checks quotas, account status, enabled APIs and resource providers; sets a cost budget with email alerts. | |
+| 2. Pulumi | Writes `infra/` in your app's language: private network, HTTPS entry point, web and worker containers, managed database and Redis, secrets, registry, scheduled jobs. Runs `pulumi preview`. | **Gate B:** resources and monthly cost |
 | 3. Images, secrets, data | Builds the image, copies secrets without printing them, rehearses the database copy and verifies it. | |
 | 4. Verify | Runs the app on a side hostname, sets up GitHub Actions over OIDC with a deploy check that proves the new code is live. | **Gate C:** you click around |
 | 5. Cutover | Stops writes, final copy and verify, DNS switch, 30 minutes of watching. Old platform stays paused for rollback. | **Gate D:** the DNS change |
 | 6. Cleanup | Only when you ask. | each deletion |
 
-It keeps a `MIGRATION.md` in your repo with what exists, what was verified and how, and what's
+It prints a plan and a ✓ line per phase as it goes, ends with a 🎉 summary, and keeps a
+`MIGRATION.md` in your repo with what exists, what was verified and how, and what's
 next, so a new session can pick up where the last one stopped.
 
 ## Install
@@ -57,8 +74,8 @@ cp -r opulumi/skills/opulumi ~/.claude/skills/            # all projects
 npx skills add amanmibra/opulumi
 ```
 
-You'll need the AWS CLI with an SSO or IAM profile, the Pulumi CLI, Docker, `gh`, and your
-platform's CLI (`railway`, `render`, `heroku` or `fly`) logged in.
+You'll need the Pulumi CLI, Docker, `gh`, your cloud's CLI (`aws`, `gcloud` or `az`) signed in,
+and your platform's CLI (`railway`, `render`, `heroku` or `fly`) logged in.
 
 ## What's inside
 
@@ -66,13 +83,16 @@ platform's CLI (`railway`, `render`, `heroku` or `fly`) logged in.
 skills/opulumi/
   SKILL.md                      the phases, gates and ground rules
   references/
-    service-mapping.md          PaaS concept → AWS resource, and rough monthly cost
-    pulumi-program.md           layout and the decisions that matter (network, ALB, ECS, RDS)
+    service-mapping.md          PaaS concept → AWS / GCP / Azure, which cloud, rough monthly cost
+    pulumi.md                   providers, state, layout, rules for any cloud
+    clouds/aws.md               preflight, program, secrets, CI, cutover, gotchas
+    clouds/gcp.md               same, for Cloud Run + Cloud SQL
+    clouds/azure.md             same, for Container Apps + Flexible Server
     secrets.md                  moving env vars without printing them
     data.md                     Postgres, MySQL, Redis and volumes
     ci.md                       GitHub Actions over OIDC, and proving a deploy
     cutover.md                  the runbook, with rollback
-    gotchas.md                  the failures this migration hits most
+    gotchas.md                  failures every cloud hits
   scripts/
     pg_move.py                  Postgres preflight, dump, restore, verify (rows, migrations, sequences)
     rehearse_pg.sh              tests pg_move.py against two throwaway containers
@@ -80,19 +100,20 @@ skills/opulumi/
 
 ## Safety
 
-- It pins the AWS account (`aws:allowedAccountIds` plus an identity check) and never uses your
-  default profile.
+- It pins the AWS account, GCP project or Azure subscription (checked live and guarded in the
+  program) and never relies on your defaults.
 - Secret values never reach the terminal, a log, a commit or Pulumi state.
 - The old platform is read-only to the agent until you approve a change to it.
 - Stateful resources get deletion protection, backups and final snapshots; a `pulumi preview`
   that would replace a database stops the run.
 
-Read the preview anyway. It's your AWS bill.
+Read the preview anyway. It's your cloud bill.
 
 ## Cost
 
-A web service, a worker and a small Multi-AZ Postgres come to roughly $80-100/month on AWS. That's
-about the same as a paid PaaS tier. You're paying for control and reliability, not saving money.
+For a web service, a worker and an HA Postgres, expect roughly $80-100/month on AWS, $170-250 on
+GCP and $110-350 on Azure, depending mostly on the database tier. That's in the range of a paid
+PaaS tier. You're paying for control and reliability, not saving money.
 See [service-mapping.md](skills/opulumi/references/service-mapping.md#rough-monthly-cost).
 
 ## License

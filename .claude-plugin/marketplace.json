@@ -5,7 +5,7 @@
     {
       "name": "opulumi",
       "source": "./",
-      "description": "Move an app off a PaaS onto AWS, defined in Pulumi."
+      "description": "Move an app off a PaaS onto AWS, GCP or Azure, defined in Pulumi."
     }
   ]
 }

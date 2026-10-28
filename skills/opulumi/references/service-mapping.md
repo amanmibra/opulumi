@@ -1,38 +1,60 @@
-# Mapping PaaS concepts to AWS
+# Mapping PaaS concepts to a cloud
 
-| On the PaaS | On AWS | Notes |
+## Which cloud
+
+Ask the user. If they have no preference, recommend in this order:
+
+| Cloud | Pick it when | Feels like |
 |---|---|---|
-| Web service (Railway service with a domain, Render web service, Heroku `web` dyno, Fly app with `http_service`) | ECS Fargate service behind an ALB target group | Health check path from the PaaS config; default to `/` only if there is none. |
-| Background worker (Render background worker, Heroku `worker` dyno, Railway service without a domain) | ECS Fargate service, no load balancer, security group with no inbound rules | Same image as web is fine; override the command. |
-| Private service (Render private service, Railway private networking, Fly `.internal`) | ECS service registered in Cloud Map (`<name>.<app>.internal`) | Replace `*.railway.internal` / `*.onrender.com` / `*.flycast` hostnames in env. |
-| Cron job (Render cron, Railway cron, Heroku Scheduler) | EventBridge Scheduler schedule → `ecs:RunTask` with a command override | Schedules are UTC unless you set a timezone. Heroku Scheduler is best-effort; Scheduler is not, so jobs that were never quite idempotent may now double-run less but fail louder. |
-| Release / pre-deploy command (Heroku `release`, Render `preDeployCommand`, Railway pre-deploy) | A one-off ECS task run by CI before the service update, or migrate on startup if the app already does | Never run migrations from every web replica at once without a lock. |
-| Managed Postgres / MySQL | RDS (same engine, same major version) | Aurora Serverless v2 only if the user wants it; RDS on `db.t4g` is cheaper for small apps. |
-| Managed Redis / Key Value | ElastiCache (Valkey or Redis OSS), serverless or `cache.t4g.micro` | Or keep a hosted Redis (Upstash) if it was only a cache. TLS is on for serverless; clients may need `rediss://`. |
-| Persistent disk / volume | S3 for files the app writes as objects; EFS if the app truly needs a POSIX path | Fargate has no persistent local disk. A volume is the most common blocker; find it in Phase 0. |
-| Static site | S3 + CloudFront, or keep it where it is (Cloudflare Pages, Vercel) | Moving a static site rarely buys reliability; ask. |
-| Env groups / shared variables | Secrets Manager entries under `<app>/<stack>/`, referenced by several task definitions | |
-| Custom domain + automatic TLS | ACM certificate (free) on the ALB; DNS CNAME/ALIAS at the ALB | Validate the cert with one DNS record before cutover. |
-| Autoscaling | ECS Service Auto Scaling on CPU or ALB request count | Start with a fixed count equal to the PaaS's; add scaling later. |
-| Preview environments | A second Pulumi stack, or skip | Most small teams don't need them on day one. Ask. |
-| Logs / metrics | CloudWatch Logs (set retention), Container Insights optional | Ship to the user's existing log tool if they have one. |
+| **AWS** | Default. Largest ecosystem, most answers online, predictable small-app costs. | More wiring (VPC, ALB), most control. |
+| **GCP** | They want the closest thing to a PaaS: Cloud Run deploys an image and scales by request. | Closest to Railway/Render. |
+| **Azure** | Their company is on Microsoft (Entra ID, credits, enterprise agreement) or a customer needs it. | Container Apps is close to Cloud Run; more naming and registration rules. |
+
+All three have first-class Pulumi providers and managed containers, Postgres, MySQL, Redis,
+secrets and registries. Oracle, IBM and Alibaba are out of scope (thinner Pulumi support, few PaaS
+users). DigitalOcean and Hetzner have good providers but aren't covered here.
+
+## Concept by concept
+
+| On the PaaS | AWS | GCP | Azure |
+|---|---|---|---|
+| Web service | ECS Fargate service + ALB | Cloud Run service (+ global external ALB for the domain) | Container App with external ingress |
+| Background worker | ECS service, no inbound | Cloud Run worker pool (or service with `cpuIdle: false`) | Container App, no ingress |
+| Private service / internal networking | ECS + Cloud Map | Cloud Run, internal ingress | Container App, internal ingress |
+| Cron job | EventBridge Scheduler → ECS RunTask | Cloud Scheduler → Cloud Run job | Container Apps job, schedule trigger |
+| Release / pre-deploy command | One-off ECS task from CI | Cloud Run job executed by CI | Manual Container Apps job started by CI |
+| Postgres / MySQL | RDS | Cloud SQL (Enterprise edition) | Database for PostgreSQL / MySQL Flexible Server |
+| Redis / Key Value | ElastiCache (Valkey) | Memorystore | Azure Managed Redis |
+| Volume / disk | S3 (EFS if a path is required) | Cloud Storage (Filestore if a path is required) | Blob Storage (Azure Files if a path is required) |
+| Env vars / secrets | Secrets Manager | Secret Manager | Key Vault |
+| Image registry | ECR | Artifact Registry | Container Registry |
+| Custom domain + TLS | ACM cert on the ALB | Google-managed cert on the LB | Managed certificate on the Container App |
+| Autoscaling | ECS Service Auto Scaling | Built in (requests/CPU) | Built in (KEDA rules) |
+| Logs | CloudWatch Logs | Cloud Logging | Log Analytics |
+| CI auth from GitHub | IAM OIDC role | Workload Identity Federation | Federated credential on a managed identity |
+| Budget alerts | AWS Budgets | Cloud Billing budget | Cost Management budget |
+
+Things that usually need a code change on any cloud, to flag at Gate A: writing files to local
+disk, reading platform env vars (`RAILWAY_*`, `RENDER_*`, `DYNO`, `FLY_*`), hard-coded internal
+hostnames, and relying on the platform to run migrations.
+
+Static sites: moving them rarely buys reliability. Leave them where they are unless asked.
 
 ## Rough monthly cost
 
-us-east-1 list prices, rounded; check current pricing before quoting a total to the user.
+Ballparks for **one web service, one worker, an HA Postgres, light traffic**, at list price in a
+US region. Prices change; check the cloud's calculator before quoting a total, and show the user
+the line items.
 
-| Item | ≈ USD / month |
-|---|---|
-| Fargate task, 0.5 vCPU / 1 GB, always on (x86) | 18 (ARM about 20% less) |
-| Fargate task, 0.25 vCPU / 0.5 GB | 9 |
-| Application Load Balancer, light traffic | 18-22 |
-| Public IPv4 address (one per task in public subnets) | 3.65 each |
-| NAT gateway (avoid unless required) | 33 each + data |
-| RDS `db.t4g.micro` Postgres, single-AZ / Multi-AZ, 20 GB gp3 | 14 / 28 |
-| ElastiCache `cache.t4g.micro` | 12 |
-| Secrets Manager | 0.40 per secret |
-| CloudWatch Logs | 0.50 per GB ingested |
-| ECR | 0.10 per GB stored; add a lifecycle policy |
+| | AWS | GCP | Azure |
+|---|---|---|---|
+| Web (always on, ~0.5-1 vCPU) | Fargate 0.5 vCPU/1 GB ≈ $18 | Cloud Run min 1 instance, 1 vCPU ≈ $25-50 | Container App 0.5 vCPU/1 GiB ≈ $30-40 |
+| Worker | ≈ $18 | ≈ $25-50 | ≈ $30-40 |
+| Load balancer | ALB ≈ $18-22 | Global external ALB ≈ $18-25 | included in Container Apps |
+| Postgres, HA, smallest production tier | RDS `db.t4g.micro` Multi-AZ ≈ $28 | Cloud SQL `db-custom-1-3840` regional ≈ $100 | Flexible Server GP `D2ds_v5` zone-redundant ≈ $250; Burstable `B1ms` without HA ≈ $15 |
+| Public IPs / NAT | $3.65 per task IP; avoid NAT ($33) | none needed | none needed |
+| Secrets, registry, logs | $5-10 | $5-10 | $5-10 |
+| **Typical total** | **$80-100** | **$170-250** | **$110-350** depending on HA |
 
-A web + worker app with a small Multi-AZ Postgres usually lands around $80-100/month, comparable
-to a PaaS's paid tier. The trade is cost for control and an SLA, not a big saving; say so plainly.
+The cheap options on GCP and Azure skip HA or an SLA (shared-core Cloud SQL, Burstable Postgres).
+Say which you chose and why. Leaving a PaaS is about control and reliability, not saving money.
