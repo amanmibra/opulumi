@@ -1,4 +1,4 @@
-# opulumi
+# opulumi (Opus + Pulumi)
 
 An agent skill that moves your app off a PaaS (Railway, Render, Heroku, Fly.io, DigitalOcean App
 Platform) and onto your own **AWS, Google Cloud or Azure** account, defined in
