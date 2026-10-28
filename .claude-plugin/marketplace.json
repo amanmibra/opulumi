@@ -1,0 +1,11 @@
+{
+  "name": "opulumi",
+  "owner": { "name": "Aman Ibrahim" },
+  "plugins": [
+    {
+      "name": "opulumi",
+      "source": "./",
+      "description": "Move an app off a PaaS onto AWS, defined in Pulumi."
+    }
+  ]
+}

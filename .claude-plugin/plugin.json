@@ -1,0 +1,10 @@
+{
+  "name": "opulumi",
+  "description": "Move an app off Railway, Render, Heroku or Fly onto AWS, defined in Pulumi, with an agent doing the work and you approving each step that matters.",
+  "version": "0.1.0",
+  "author": { "name": "Aman Ibrahim" },
+  "homepage": "https://github.com/amanmibra/opulumi",
+  "repository": "https://github.com/amanmibra/opulumi",
+  "license": "MIT",
+  "keywords": ["aws", "pulumi", "migration", "railway", "render", "heroku", "fly", "ecs", "fargate"]
+}
