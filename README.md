@@ -15,6 +15,39 @@ your app's language.
 /opulumi Heroku → Azure, keep Postgres 15
 ```
 
+## Install
+
+```sh
+npx skills add amanmibra/opulumi
+```
+
+That's it. Open your agent in the app's repo and run `/opulumi`. Works with Claude Code, Codex,
+Cursor and [other agents](https://github.com/vercel-labs/skills). Add `-g` to install for every
+project instead of just this one.
+
+<details>
+<summary>Other ways to install</summary>
+
+**Claude Code plugin** (runs as `/opulumi:opulumi`)
+
+```
+/plugin marketplace add amanmibra/opulumi
+/plugin install opulumi@opulumi
+```
+
+**By hand** (runs as `/opulumi`)
+
+```sh
+git clone https://github.com/amanmibra/opulumi
+cp -r opulumi/skills/opulumi ~/.claude/skills/     # every project
+cp -r opulumi/skills/opulumi .claude/skills/       # or just this one
+```
+
+</details>
+
+**You'll need:** the Pulumi CLI, Docker, `gh`, your cloud's CLI (`aws`, `gcloud` or `az`) signed
+in, and your platform's CLI (`railway`, `render`, `heroku` or `fly`) logged in.
+
 ## Why
 
 PaaS developer experience is great until the platform has an outage and you can't do anything but
@@ -50,32 +83,6 @@ asks.
 It prints a plan and a ✓ line per phase as it goes, ends with a 🎉 summary, and keeps a
 `MIGRATION.md` in your repo with what exists, what was verified and how, and what's
 next, so a new session can pick up where the last one stopped.
-
-## Install
-
-**Claude Code plugin**
-
-```
-/plugin marketplace add amanmibra/opulumi
-/plugin install opulumi@opulumi
-```
-
-**Copy the skill** (gives you `/opulumi`)
-
-```sh
-git clone https://github.com/amanmibra/opulumi
-cp -r opulumi/skills/opulumi ~/.claude/skills/            # all projects
-# or: cp -r opulumi/skills/opulumi .claude/skills/        # one project
-```
-
-**Other agents** (Codex, Cursor, etc. via [skills](https://github.com/vercel-labs/skills))
-
-```sh
-npx skills add amanmibra/opulumi
-```
-
-You'll need the Pulumi CLI, Docker, `gh`, your cloud's CLI (`aws`, `gcloud` or `az`) signed in,
-and your platform's CLI (`railway`, `render`, `heroku` or `fly`) logged in.
 
 ## What's inside
 
