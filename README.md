@@ -39,8 +39,8 @@ asks.
 
 | Phase | What happens | You approve |
 |---|---|---|
-| 0. Inventory | Reads `railway.json`, `render.yaml`, `Procfile`, `fly.toml`, the platform CLI. Lists every service, env var name, database, volume, cron and domain, and maps each to AWS. | **Gate A:** the plan, account, region |
-| 1. Preflight | Checks quotas, account status, enabled APIs and resource providers; sets a cost budget with email alerts. | |
+| 0. Inventory | Reads `railway.json`, `render.yaml`, `Procfile`, `fly.toml`, the platform CLI. Lists every service, env var name, database, volume, cron and domain, and maps each to the cloud. | **Gate A:** the plan, cloud, account, region, budget and alerts |
+| 1. Preflight | Checks quotas, account status, enabled APIs and resource providers; builds the budget, alerts and instance caps you chose. | |
 | 2. Pulumi | Writes `infra/` in your app's language: private network, HTTPS entry point, web and worker containers, managed database and Redis, secrets, registry, scheduled jobs. Runs `pulumi preview`. | **Gate B:** resources and monthly cost |
 | 3. Images, secrets, data | Builds the image, copies secrets without printing them, rehearses the database copy and verifies it. | |
 | 4. Verify | Runs the app on a side hostname, sets up GitHub Actions over OIDC with a deploy check that proves the new code is live. | **Gate C:** you click around |
@@ -90,6 +90,7 @@ skills/opulumi/
     clouds/azure.md             same, for Container Apps + Flexible Server
     secrets.md                  moving env vars without printing them
     data.md                     Postgres, MySQL, Redis and volumes
+    cost-controls.md            budget, alerts, caps: the questions it asks and what each cloud can do
     ci.md                       GitHub Actions over OIDC, and proving a deploy
     cutover.md                  the runbook, with rollback
     gotchas.md                  failures every cloud hits
@@ -104,6 +105,8 @@ skills/opulumi/
   program) and never relies on your defaults.
 - Secret values never reach the terminal, a log, a commit or Pulumi state.
 - The old platform is read-only to the agent until you approve a change to it.
+- It asks for a monthly budget, alert emails and instance caps up front, and is honest that no
+  cloud hard-stops billing at a dollar amount.
 - Stateful resources get deletion protection, backups and final snapshots; a `pulumi preview`
   that would replace a database stops the run.
 

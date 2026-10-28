@@ -58,7 +58,7 @@ At the start, after Phase 0 has enough to fill it in, print the plan:
 opulumi ▸ plan  ·  Railway → AWS us-east-1  ·  Pulumi (TypeScript)
 
   ○ 0  Inventory        4 services · 1 Postgres 16 · 1 Redis · 2 domains
-  ○ 1  Preflight        account 1234…9012 · quotas · budget
+  ○ 1  Preflight        account 1234…9012 · quotas · budget $150/mo + alerts
   ○ 2  Pulumi program   network · load balancer · web ×2 · worker · cron · Postgres · Redis
   ○ 3  Ship             image · 14 secrets · data rehearsal
   ○ 4  Verify           side hostname · CI over OIDC
@@ -112,7 +112,10 @@ Write the result as a table at the top of `MIGRATION.md`, with the target resour
 
 **Gate A:** show the user the inventory, the proposed cloud (if they didn't name one, recommend
 using the "Which cloud" table in service-mapping.md), the mapping, the account/project/subscription
-and region, the Pulumi language, and the state backend. Get a yes before creating anything.
+and region, the Pulumi language, and the state backend. Ask the cost-control questions in
+[references/cost-controls.md](references/cost-controls.md): monthly budget, who gets alerts,
+thresholds, alerts only or an automatic action, maximum instances per service, anomaly alerts.
+Get a yes before creating anything.
 
 ## Phase 1: Preflight
 
@@ -121,8 +124,10 @@ blocked accounts, disabled APIs, unregistered resource providers, SKUs not offer
 Run the chosen cloud's **Preflight** section before writing the program, and fix what it finds
 (request quota now; it can take days).
 
-Create a monthly budget with email alerts (80% actual, 100% actual, 100% forecast) as part of the
-stack. It is free and catches mistakes the day they happen.
+Build the cost controls the user chose at Gate A into the stack: the budget and its alerts, any
+automatic action, anomaly alerts, and max instance counts on every service. Budgets are free and
+catch mistakes the day they happen. No cloud stops billing at a dollar amount on its own, so say
+that plainly; see [references/cost-controls.md](references/cost-controls.md).
 
 ## Phase 2: Pulumi program
 
@@ -140,7 +145,8 @@ cloud:
   release commands as scheduled/one-off jobs.
 - **Logs** with retention, never infinite.
 
-Run `pulumi preview`. **Gate B:** show the user the resource list and the estimated monthly cost
+Run `pulumi preview`. **Gate B:** show the user the resource list, the cost controls as built
+(budget, alert recipients, max instances), and the estimated monthly cost
 (see [service-mapping.md](references/service-mapping.md#rough-monthly-cost), line by line) before
 `pulumi up`.
 
